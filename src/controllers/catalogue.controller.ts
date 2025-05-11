@@ -362,3 +362,67 @@ provide valide JSON Response only.
         res.status(500).json({ error: 'Failed to analyze image and process data', detailedError: error.message });
     }
 };
+
+
+
+export const getProductById = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const productId = req.params.id;
+        console.log("Product ID: ", productId);
+        if (!productId) {
+            res.status(400).json({ error: 'Invalid product ID' });
+            return;
+        }
+
+        // Fetch product with related data
+        const { data: product, error } = await supabase
+            .from('products')
+            .select(`
+                *,
+                brand: brands(*),
+                vendor: vendors(*),
+                collection: collections(*),
+                colors: product_colors(*, color:colors(*)),
+                sizes: product_sizes(*, size:sizes(*)),
+                attributes: product_attributes(
+                    *,
+                    attribute:attributes(*),
+                    attribute_value:attribute_values(*)
+                )
+            `)
+            .eq('id', productId)
+            .single();
+
+        if (error) {
+            throw error;
+        }
+
+        if (!product) {
+            res.status(404).json({ error: 'Product not found' });
+            return;
+        }
+
+        res.status(200).json(product);
+    } catch (error: any) {
+        console.error('Error fetching product:', error);
+        res.status(500).json({ error: 'Failed to fetch product', detailedError: error.message });
+    }
+};
+
+
+export const getAllProducts = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { data: products, error } = await supabase
+            .from('products')
+            .select('*');
+
+        if (error) {
+            throw error;
+        }
+
+        res.status(200).json(products);
+    } catch (error: any) {
+        console.error('Error fetching products:', error);
+        res.status(500).json({ error: 'Failed to fetch products', detailedError: error.message });
+    }
+};

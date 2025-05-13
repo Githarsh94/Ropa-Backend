@@ -208,39 +208,7 @@ provide valide JSON Response only.
 
         let productId: number | undefined;
 
-        // 1. Process Brands
-        if (llmResponse.brands && llmResponse.brands.length > 0) {
-            const brandData = llmResponse.brands[0];
-            const { id: brandId, created: brandCreated } = await findOrCreate('brands', 'name', brandData.name, {
-                name: brandData.name,
-                description: '',
-                logo_url: '',
-                website_url: '',
-                country_of_origin: '',
-            });
-            if (brandCreated) {
-                console.log("Brand Created: ", brandData.name);
-            }
-            productId && (await supabase.from('products').update({ brand_id: brandId }).eq('id', productId));
-        }
-
-        // 2. Process Collections
-        if (llmResponse.collections && llmResponse.collections.length > 0) {
-            const collectionData = llmResponse.collections[0];
-            const { id: collectionId, created: collectionCreated } = await findOrCreate('collections', 'name', collectionData.name, {
-                name: collectionData.name,
-                description: '',
-                season: '',
-                launch_date: null,
-                image_url: '',
-            });
-            if (collectionCreated) {
-                console.log("Collection Created: ", collectionData.name);
-            }
-            productId && (await supabase.from('products').update({ collection_id: collectionId }).eq('id', productId));
-        }
-
-        // 3. Process Vendors
+        // 3. Process Vendors first
         const vendorName = "Unknown Vendor";
         const { id: vendorId } = await findOrCreate('vendors', 'name', vendorName, {
             name: vendorName,
@@ -250,7 +218,41 @@ provide valide JSON Response only.
             address: '',
         });
 
-        // 4. Process Products
+        // 1. Process Brands
+        let brandId: number | undefined;
+        if (llmResponse.brands && llmResponse.brands.length > 0) {
+            const brandData = llmResponse.brands[0];
+            const result = await findOrCreate('brands', 'name', brandData.name, {
+                name: brandData.name,
+                description: '',
+                logo_url: '',
+                website_url: '',
+                country_of_origin: '',
+            });
+            brandId = result.id;
+            if (result.created) {
+                console.log("Brand Created: ", brandData.name);
+            }
+        }
+
+        // 2. Process Collections
+        let collectionId: number | undefined;
+        if (llmResponse.collections && llmResponse.collections.length > 0) {
+            const collectionData = llmResponse.collections[0];
+            const result = await findOrCreate('collections', 'name', collectionData.name, {
+                name: collectionData.name,
+                description: '',
+                season: '',
+                launch_date: null,
+                image_url: '',
+            });
+            collectionId = result.id;
+            if (result.created) {
+                console.log("Collection Created: ", collectionData.name);
+            }
+        }
+
+        // 4. Process Products - now with brand_id and collection_id
         if (llmResponse.products && llmResponse.products.length > 0) {
             const productData = llmResponse.products.reduce((acc: any, curr: any) => {
                 if (curr.name) acc.name = curr.name;
@@ -269,6 +271,8 @@ provide valide JSON Response only.
                 .insert({
                     ...productData,
                     vendor_id: vendorId,
+                    brand_id: brandId,  // Add the brand_id
+                    collection_id: collectionId, // Add the collection_id
                     image_url: '',
                 })
                 .select()
@@ -287,6 +291,8 @@ provide valide JSON Response only.
                     product_type: "Unknown",
                     category: "Unknown",
                     vendor_id: vendorId,
+                    brand_id: brandId,  // Add the brand_id
+                    collection_id: collectionId, // Add the collection_id
                     image_url: '',
                 })
                 .select()
@@ -414,7 +420,19 @@ export const getAllProducts = async (req: Request, res: Response): Promise<void>
     try {
         const { data: products, error } = await supabase
             .from('products')
-            .select('*');
+            .select(`
+                *,
+                brand: brands(*),
+                vendor: vendors(*),
+                collection: collections(*),
+                colors: product_colors(*, color:colors(*)),
+                sizes: product_sizes(*, size:sizes(*)),
+                attributes: product_attributes(
+                    *,
+                    attribute:attributes(*),
+                    attribute_value:attribute_values(*)
+                )
+            `);
 
         if (error) {
             throw error;

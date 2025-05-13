@@ -50,12 +50,20 @@ const findOrCreate = async (table: string, matchField: string, matchValue: any, 
     }
 };
 
-export const analyzeImage = async (req: Request, res: Response): Promise<void> => {
+export const analyzeImage = async (req: any, res: Response): Promise<void> => {
     try {
         if (!req.file) {
             res.status(400).json({ error: 'No image file provided' });
             return;
         }
+
+        // Get user_id from the request
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ error: 'User not authenticated' });
+            return;
+        }
+
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         const imageBase64 = req.file.buffer.toString('base64');
 
@@ -252,7 +260,7 @@ provide valide JSON Response only.
             }
         }
 
-        // 4. Process Products - now with brand_id and collection_id
+        // 4. Process Products - now with brand_id, collection_id, and user_id
         if (llmResponse.products && llmResponse.products.length > 0) {
             const productData = llmResponse.products.reduce((acc: any, curr: any) => {
                 if (curr.name) acc.name = curr.name;
@@ -271,8 +279,9 @@ provide valide JSON Response only.
                 .insert({
                     ...productData,
                     vendor_id: vendorId,
-                    brand_id: brandId,  // Add the brand_id
-                    collection_id: collectionId, // Add the collection_id
+                    brand_id: brandId,
+                    collection_id: collectionId,
+                    user_id: userId,  // Add the user_id
                     image_url: '',
                 })
                 .select()
@@ -291,8 +300,9 @@ provide valide JSON Response only.
                     product_type: "Unknown",
                     category: "Unknown",
                     vendor_id: vendorId,
-                    brand_id: brandId,  // Add the brand_id
-                    collection_id: collectionId, // Add the collection_id
+                    brand_id: brandId,
+                    collection_id: collectionId,
+                    user_id: userId,  // Add the user_id
                     image_url: '',
                 })
                 .select()
